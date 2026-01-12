@@ -17,7 +17,11 @@ public class EmailGeneratorService {
             @Value("${gemini.api.url}") String baseUrl,
             @Value("${gemini.api.key}") String geminiApiKey
     ) {
-        this.webClient = webClientBuilder.baseUrl(baseUrl).build();
+        // ✅ baseUrl MUST be: https://generativelanguage.googleapis.com/v1beta
+        this.webClient = webClientBuilder
+                .baseUrl(baseUrl)
+                .build();
+
         this.apiKey = geminiApiKey;
     }
 
@@ -40,7 +44,8 @@ public class EmailGeneratorService {
         """, prompt.replace("\"", "\\\""));
 
         String response = webClient.post()
-                .uri("/v1beta/models/gemini-3-flash-preview:generateContent")
+                // ✅ DO NOT repeat /v1beta here
+                .uri("/models/gemini-1.5-flash:generateContent")
                 .header("Content-Type", "application/json")
                 .header("x-goog-api-key", apiKey)
                 .bodyValue(requestBody)
@@ -66,11 +71,6 @@ public class EmailGeneratorService {
                     .path("text")
                     .asText();
 
-            // 🔒 Safety net: remove accidental options
-            if (text.toLowerCase().contains("option 1")) {
-                text = text.split("option 1")[0];
-            }
-
             return text.trim();
 
         } catch (Exception e) {
@@ -90,9 +90,8 @@ You are a professional email reply generator.
 STRICT RULES (DO NOT BREAK):
 - Generate ONLY ONE final email reply.
 - Do NOT provide multiple options.
-- Do NOT include headings like "Option 1", "Option 2", or "Option 3".
+- Do NOT include headings like "Option 1", "Option 2".
 - Do NOT explain your reasoning.
-- Do NOT give alternatives.
 - Output ONLY the email reply text.
 
 """);
