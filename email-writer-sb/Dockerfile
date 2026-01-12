@@ -1,24 +1,24 @@
-# Java 17 base image
-FROM eclipse-temurin:21-jdk-alpine
+# -------- BUILD STAGE --------
+FROM eclipse-temurin:21-jdk-alpine AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy maven wrapper and pom
 COPY .mvn/ .mvn
 COPY mvnw pom.xml ./
-
-# Give permission to mvnw
 RUN chmod +x mvnw
-
-# Download dependencies
 RUN ./mvnw dependency:go-offline
 
-# Copy source code
 COPY src ./src
-
-# Build application
 RUN ./mvnw clean package -DskipTests
 
-# Run Spring Boot app
-CMD ["java", "-jar", "target/*.jar"]
+# -------- RUN STAGE --------
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Copy the built jar with a FIXED name
+COPY --from=build /app/target/*.jar app.jar
+
+EXPOSE 8080
+
+CMD ["java", "-jar", "app.jar"]
