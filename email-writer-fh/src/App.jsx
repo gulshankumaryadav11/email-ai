@@ -12,6 +12,10 @@ import axios from 'axios';
 import { saveAs } from 'file-saver';
 
 function App() {
+
+  /* ================= ENV ================= */
+  const API_URL = import.meta.env.VITE_API_URL;
+
   /* ================= STATES ================= */
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('generator');
@@ -53,7 +57,7 @@ function App() {
 
 Thank you for your email.
 
-Please let me know the specific details you require so that I can assist you accurately.
+Please let me know the details so I can assist you better.
 
 Best regards,
 [Your Name]`;
@@ -61,24 +65,24 @@ Best regards,
       case 'Friendly':
         return `Hi 😊,
 
-Thanks for reaching out!  
-Could you please share a bit more detail so I can help you better?
+Thanks for reaching out!
+Could you please share a bit more detail?
 
 Best,
 [Your Name]`;
 
       case 'Casual':
-        return `Hi,
+        return `Hey,
 
-Got your message!  
-Can you tell me a little more about what you’re looking for?
+Got your message 🙂
+Can you tell me a little more?
 
 Thanks!`;
 
       default:
         return `Hello,
 
-Please let me know how I can help you.
+Please let me know how I can help.
 
 Thanks`;
     }
@@ -88,11 +92,14 @@ Thanks`;
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:8080/api/email/generate', {
-        emailContent,
-        instructions,
-        tone   // 🔥 ONLY TONE SENT
-      });
+      const res = await axios.post(
+        `${API_URL}/api/email/generate`,
+        {
+          emailContent,
+          instructions,
+          tone
+        }
+      );
 
       const reply = res.data?.trim() || generateToneReply(tone);
       setGeneratedReply(reply);
@@ -112,7 +119,8 @@ Thanks`;
       }));
 
       toast.success('Reply Generated');
-    } catch {
+    } catch (err) {
+      console.error(err);
       setGeneratedReply(generateToneReply(tone));
       toast.warning('Backend unavailable – using tone-based reply');
     } finally {
@@ -122,7 +130,7 @@ Thanks`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedReply);
-    toast.success('Copied');
+    toast.success('Copied to clipboard');
   };
 
   const handleDownload = () => {
@@ -135,11 +143,9 @@ Thanks`;
       {/* ===== NAVBAR ===== */}
       <AppBar
         position="sticky"
-        sx={{
-          background: 'linear-gradient(90deg,#2f3c7e,#546e7a)'
-        }}
+        sx={{ background: 'linear-gradient(90deg,#2f3c7e,#546e7a)' }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
             EMIPI
           </Typography>
@@ -164,7 +170,7 @@ Thanks`;
             color="secondary"
             onClick={() => setDarkMode(!darkMode)}
           >
-            {darkMode ? 'Light Mode' : 'Dark Mode'}
+            {darkMode ? 'Light' : 'Dark'}
           </Button>
         </Toolbar>
       </AppBar>
@@ -189,8 +195,7 @@ Thanks`;
         </Typography>
 
         <Typography sx={{ mt: 2, color: '#cfd8dc', textAlign: 'center', maxWidth: 700 }}>
-          EMIPI helps you write professional, friendly, or casual email replies instantly —
-          just choose a tone and get a polished response.
+          Generate professional, friendly, or casual email replies instantly.
         </Typography>
       </Box>
 
@@ -214,7 +219,7 @@ Thanks`;
                   fullWidth
                   multiline
                   rows={3}
-                  label="Additional Instructions (Optional)"
+                  label="Additional Instructions"
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
                   sx={{ mb: 2 }}
@@ -248,10 +253,7 @@ Thanks`;
                       rows={10}
                       value={generatedReply}
                       onChange={(e) => setGeneratedReply(e.target.value)}
-                      sx={{
-                        mb: 2,
-                        '& textarea': { resize: 'vertical' }
-                      }}
+                      sx={{ mb: 2 }}
                     />
 
                     <Box sx={{ display: 'flex', gap: 1 }}>
@@ -297,6 +299,3 @@ Thanks`;
 }
 
 export default App;
-
-
-
