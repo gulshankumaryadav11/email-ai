@@ -17,4 +17,9 @@ public class EmailGeneratorController {
         return ResponseEntity.ok(response);
 
     }
+    @GetMapping("/ping")
+    public String ping() {
+        return "API is working";
+    }
+
 }
