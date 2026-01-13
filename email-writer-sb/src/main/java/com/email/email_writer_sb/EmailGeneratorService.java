@@ -14,71 +14,58 @@ public class EmailGeneratorService {
 
     public EmailGeneratorService(
             WebClient.Builder webClientBuilder,
-            @Value("${gemini.api.url}") String baseUrl,
-            @Value("${gemini.api.key}") String geminiApiKey
+            @Value("${groq.api.key}") String apiKey
     ) {
-        // ✅ baseUrl MUST be: https://generativelanguage.googleapis.com/v1beta
+        this.apiKey = apiKey;
         this.webClient = webClientBuilder
-                .baseUrl(baseUrl)
+                .baseUrl("https://api.groq.com/openai/v1")
+                .defaultHeader("Authorization", "Bearer " + apiKey)
+                .defaultHeader("Content-Type", "application/json")
                 .build();
-
-        this.apiKey = geminiApiKey;
     }
 
     public String generateEmailReply(EmailRequest emailRequest) {
 
         String prompt = buildPrompt(emailRequest);
 
-        String requestBody = String.format("""
+        String requestBody = """
         {
-          "contents": [
+          "model": "llama3-8b-8192",
+          "messages": [
             {
-              "parts": [
-                {
-                  "text": "%s"
-                }
-              ]
+              "role": "user",
+              "content": "%s"
             }
-          ]
+          ],
+          "temperature": 0.7
         }
-        """, prompt.replace("\"", "\\\""));
+        """.formatted(prompt.replace("\"", "\\\""));
 
         String response = webClient.post()
-                // ✅ DO NOT repeat /v1beta here
-                .uri("/models/gemini-1.5-flash:generateContent")
-                .header("Content-Type", "application/json")
-                .header("x-goog-api-key", apiKey)
+                .uri("/chat/completions")
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
 
-        return extractResponseContent(response);
+        return extractResponse(response);
     }
 
-    /* ================= RESPONSE PARSER ================= */
-
-    private String extractResponseContent(String response) {
+    private String extractResponse(String response) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(response);
-
-            String text = root.path("candidates")
+            return root
+                    .path("choices")
                     .get(0)
+                    .path("message")
                     .path("content")
-                    .path("parts")
-                    .get(0)
-                    .path("text")
-                    .asText();
-
-            return text.trim();
-
+                    .asText()
+                    .trim();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse Gemini response", e);
+            throw new RuntimeException("Failed to parse Groq response", e);
         }
     }
-
-    /* ================= PROMPT BUILDER ================= */
 
     private String buildPrompt(EmailRequest emailRequest) {
 
@@ -87,35 +74,23 @@ public class EmailGeneratorService {
         prompt.append("""
 You are a professional email reply generator.
 
-STRICT RULES (DO NOT BREAK):
-- Generate ONLY ONE final email reply.
-- Do NOT provide multiple options.
-- Do NOT include headings like "Option 1", "Option 2".
-- Do NOT explain your reasoning.
-- Output ONLY the email reply text.
+STRICT RULES:
+- Generate ONLY ONE final email reply
+- No options
+- No explanation
+- Output ONLY email text
 
 """);
 
         if (emailRequest.getTone() != null && !emailRequest.getTone().isEmpty()) {
-            prompt.append("Tone: ")
-                    .append(emailRequest.getTone())
-                    .append("\n");
+            prompt.append("Tone: ").append(emailRequest.getTone()).append("\n");
         }
 
-        prompt.append("""
-Tone meanings:
-- Professional: formal, business-like language
-- Friendly: warm and polite language
-- Casual: relaxed and conversational language
-
-Original email:
-""");
-
+        prompt.append("\nOriginal email:\n");
         prompt.append(emailRequest.getEmailContent());
 
         if (emailRequest.getInstructions() != null &&
                 !emailRequest.getInstructions().isEmpty()) {
-
             prompt.append("\n\nAdditional instructions:\n")
                     .append(emailRequest.getInstructions());
         }
