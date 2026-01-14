@@ -3,20 +3,20 @@ import {
   Container, Typography, Box, TextField, FormControl, InputLabel,
   MenuItem, Select, Button, CircularProgress, Paper, Card,
   CardContent, Grid, List, ListItem, ListItemText,
-  AppBar, Toolbar, IconButton
+  AppBar, Toolbar
 } from '@mui/material';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import axios from 'axios';
 import { saveAs } from 'file-saver';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
 
 function App() {
 
+  /* ================= ENV ================= */
   const API_URL = import.meta.env.VITE_API_URL;
 
+  /* ================= STATES ================= */
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('generator');
   const [emailContent, setEmailContent] = useState('');
@@ -31,21 +31,64 @@ function App() {
     averageReplyLength: 0
   });
 
+  /* ================= THEME ================= */
   const theme = useMemo(() =>
     createTheme({
       palette: {
         mode: darkMode ? 'dark' : 'light',
-        primary: { main: '#6C63FF' },
+        primary: { main: darkMode ? '#9fa8da' : '#2f3c7e' },
+        secondary: { main: darkMode ? '#b0bec5' : '#78909c' },
         background: {
-          default: darkMode ? '#0f172a' : '#f1f5f9',
-          paper: 'rgba(255,255,255,0.15)'
+          default: darkMode ? '#101820' : '#eef1f5',
+          paper: darkMode ? '#1c2431' : '#ffffff'
         }
       },
-      shape: { borderRadius: 16 },
-      typography: { fontFamily: 'Inter, sans-serif' }
+      typography: {
+        fontFamily: 'Georgia, Inter, serif'
+      }
     }), [darkMode]
   );
 
+  /* ================= FALLBACK ================= */
+  const generateToneReply = (tone) => {
+    switch (tone) {
+      case 'Professional':
+        return `Dear Sir/Madam,
+
+Thank you for your email.
+
+Please let me know the details so I can assist you better.
+
+Best regards,
+[Your Name]`;
+
+      case 'Friendly':
+        return `Hi 😊,
+
+Thanks for reaching out!
+Could you please share a bit more detail?
+
+Best,
+[Your Name]`;
+
+      case 'Casual':
+        return `Hey,
+
+Got your message 🙂
+Can you tell me a little more?
+
+Thanks!`;
+
+      default:
+        return `Hello,
+
+Please let me know how I can help.
+
+Thanks`;
+    }
+  };
+
+  /* ================= GENERATE ================= */
   const handleSubmit = async () => {
     setLoading(true);
     try {
@@ -55,7 +98,7 @@ function App() {
         tone
       });
 
-      const reply = res.data;
+      const reply = res.data?.trim() || generateToneReply(tone);
       setGeneratedReply(reply);
 
       setHistory(prev => [
@@ -72,155 +115,183 @@ function App() {
         )
       }));
 
-      toast.success('Reply Generated ✨');
-    } catch {
-      toast.error('Backend Error');
+      toast.success('Reply Generated');
+    } catch (err) {
+      console.error(err);
+      setGeneratedReply(generateToneReply(tone));
+      toast.warning('Backend unavailable – using fallback reply');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedReply);
+    toast.success('Copied to clipboard');
+  };
+
+  const handleDownload = () => {
+    saveAs(new Blob([generatedReply]), 'email_reply.txt');
+    toast.success('Downloaded');
+  };
+
   return (
     <ThemeProvider theme={theme}>
-      {/* ===== NAVBAR ===== */}
-      <AppBar
-        position="sticky"
-        sx={{
-          backdropFilter: 'blur(12px)',
-          background: 'rgba(0,0,0,0.5)'
-        }}
-      >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Typography fontWeight={800}>EMIPI</Typography>
 
-          <Box sx={{ display: 'flex', gap: 1 }}>
+      {/* ===== NAVBAR (FIXED RESPONSIVE) ===== */}
+      <AppBar position="sticky" sx={{ background: 'linear-gradient(90deg,#2f3c7e,#546e7a)' }}>
+        <Toolbar
+          sx={{
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>
+            EMIPI
+          </Typography>
+
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1,
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              width: { xs: '100%', md: 'auto' }
+            }}
+          >
             {['generator', 'dashboard', 'history'].map(tab => (
               <Button
                 key={tab}
                 size="small"
                 onClick={() => setActiveTab(tab)}
-                variant={activeTab === tab ? 'contained' : 'text'}
-                sx={{ minWidth: 80 }}
+                variant={activeTab === tab ? 'contained' : 'outlined'}
+                sx={{
+                  color: '#fff',
+                  borderColor: '#fff',
+                  fontSize: { xs: '0.7rem', md: '0.8rem' },
+                  padding: { xs: '4px 6px', md: '6px 12px' }
+                }}
               >
-                {tab}
+                {tab.toUpperCase()}
               </Button>
             ))}
           </Box>
 
-          <IconButton onClick={() => setDarkMode(!darkMode)} color="inherit">
-            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-          </IconButton>
+          <Button
+            size="small"
+            variant="contained"
+            color="secondary"
+            onClick={() => setDarkMode(!darkMode)}
+            sx={{
+              width: { xs: '100%', md: 'auto' },
+              fontSize: { xs: '0.7rem', md: '0.8rem' }
+            }}
+          >
+            {darkMode ? 'Light' : 'Dark'}
+          </Button>
         </Toolbar>
       </AppBar>
 
-      {/* ===== HERO ===== */}
+      {/* ===== HEADER ===== */}
       <Box
         sx={{
-          py: 6,
-          textAlign: 'center',
+          minHeight: 220,
+          backgroundImage:
+            'linear-gradient(rgba(16,24,32,0.75),rgba(16,24,32,0.75)),url(https://images.unsplash.com/photo-1507679799987-c73779587ccf)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
           color: '#fff',
-          background:
-            'linear-gradient(135deg,#6366f1,#22d3ee)'
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          textAlign: 'center',
+          px: 2
         }}
       >
-        <Typography variant="h4" fontWeight={800}>
-          Smart Email Reply Generator
+        <Typography variant="h4" sx={{ fontWeight: 800 }}>
+          Welcome to EMIPI
         </Typography>
-        <Typography sx={{ mt: 1, opacity: 0.9 }}>
-          AI-powered replies in seconds
+
+        <Typography sx={{ mt: 2, color: '#cfd8dc', maxWidth: 700 }}>
+          Generate professional, friendly, or casual email replies instantly.
         </Typography>
       </Box>
 
       {/* ===== BODY ===== */}
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Paper
-          sx={{
-            p: { xs: 2, md: 4 },
-            backdropFilter: 'blur(14px)',
-            animation: 'fadeIn 0.6s ease'
-          }}
-        >
+      <Container maxWidth="lg" sx={{ py: 5 }}>
+        <Paper sx={{ p: { xs: 2, md: 4 } }}>
+
           {activeTab === 'generator' && (
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   multiline
-                  rows={4}
+                  rows={5}
                   label="Original Email"
                   value={emailContent}
                   onChange={(e) => setEmailContent(e.target.value)}
+                  sx={{ mb: 2 }}
                 />
-              </Grid>
 
-              <Grid item xs={12}>
                 <TextField
                   fullWidth
                   multiline
-                  rows={2}
-                  label="Extra Instructions"
+                  rows={3}
+                  label="Additional Instructions"
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
+                  sx={{ mb: 2 }}
                 />
-              </Grid>
 
-              <Grid item xs={12}>
-                <FormControl fullWidth>
+                <FormControl fullWidth sx={{ mb: 2 }}>
                   <InputLabel>Tone</InputLabel>
-                  <Select value={tone} onChange={(e) => setTone(e.target.value)}>
+                  <Select value={tone} label="Tone" onChange={(e) => setTone(e.target.value)}>
                     <MenuItem value="Professional">Professional</MenuItem>
                     <MenuItem value="Friendly">Friendly</MenuItem>
                     <MenuItem value="Casual">Casual</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
 
-              <Grid item xs={12}>
                 <Button
                   fullWidth
-                  size="large"
                   variant="contained"
                   onClick={handleSubmit}
-                  disabled={loading}
-                  sx={{ py: 1.5 }}
+                  disabled={loading || !emailContent}
                 >
                   {loading ? <CircularProgress size={22} /> : 'Generate Reply'}
                 </Button>
               </Grid>
 
-              {generatedReply && (
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={8}
-                    value={generatedReply}
-                  />
-                  <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                    <Button fullWidth onClick={() => navigator.clipboard.writeText(generatedReply)}>
-                      Copy
-                    </Button>
-                    <Button fullWidth onClick={() => saveAs(new Blob([generatedReply]), 'reply.txt')}>
-                      Download
-                    </Button>
-                  </Box>
-                </Grid>
-              )}
+              <Grid item xs={12} md={6}>
+                {generatedReply && (
+                  <>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={10}
+                      value={generatedReply}
+                      onChange={(e) => setGeneratedReply(e.target.value)}
+                      sx={{ mb: 2 }}
+                    />
+
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Button fullWidth onClick={handleCopy}>Copy</Button>
+                      <Button fullWidth onClick={handleDownload}>Download</Button>
+                    </Box>
+                  </>
+                )}
+              </Grid>
             </Grid>
           )}
 
           {activeTab === 'dashboard' && (
-            <Grid container spacing={2}>
-              {Object.entries(stats).map(([k, v]) => (
-                <Grid item xs={12} sm={4} key={k}>
-                  <Card sx={{ textAlign: 'center', p: 2 }}>
-                    <CardContent>
-                      <Typography variant="h6">{v}</Typography>
-                      <Typography variant="caption">{k}</Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}><Card><CardContent>Total Replies: {stats.totalRepliesGenerated}</CardContent></Card></Grid>
+              <Grid item xs={12} md={4}><Card><CardContent>Most Used Tone: {stats.mostUsedTone}</CardContent></Card></Grid>
+              <Grid item xs={12} md={4}><Card><CardContent>Avg Length: {stats.averageReplyLength}</CardContent></Card></Grid>
             </Grid>
           )}
 
@@ -228,22 +299,26 @@ function App() {
             <List>
               {history.map((h, i) => (
                 <ListItem key={i} divider>
-                  <ListItemText primary={h.reply} secondary={h.time} />
+                  <ListItemText primary={h.reply} secondary={`${h.tone} • ${h.time}`} />
                 </ListItem>
               ))}
             </List>
           )}
+
         </Paper>
       </Container>
 
       {/* ===== FOOTER ===== */}
-      <Box sx={{ textAlign: 'center', py: 3, opacity: 0.7 }}>
-        © {new Date().getFullYear()} EMIPI
+      <Box sx={{ textAlign: 'center', py: 3, background: '#2f3c7e', color: '#fff' }}>
+        <Typography variant="body2">
+          © {new Date().getFullYear()} EMIPI · Smart Email Replies
+        </Typography>
       </Box>
 
-      <ToastContainer position="bottom-right" />
+      <ToastContainer position="bottom-right" autoClose={3000} />
     </ThemeProvider>
   );
 }
 
 export default App;
+
