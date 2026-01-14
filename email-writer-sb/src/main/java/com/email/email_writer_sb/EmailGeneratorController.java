@@ -11,15 +11,24 @@ import org.springframework.web.bind.annotation.*;
 public class EmailGeneratorController {
 
     private final EmailGeneratorService emailGeneratorService;
+
+   
     @PostMapping("/generate")
-    public ResponseEntity<String> generateEmail(@RequestBody EmailRequest emailRequest){
-        String response = emailGeneratorService.generateEmailReply(emailRequest);
-        return ResponseEntity.ok(response);
-
+    public ResponseEntity<?> generateEmail(@RequestBody EmailRequest emailRequest) {
+        try {
+            String response = emailGeneratorService.generateEmailReply(emailRequest);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace(); //
+            return ResponseEntity
+                    .status(500)
+                    .body("Error generating email: " + e.getMessage());
+        }
     }
+
+
     @GetMapping("/ping")
-    public String ping() {
-        return "API is working";
+    public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("API is working");
     }
-
 }
