@@ -2,56 +2,56 @@ package com.email.email_writer_sb;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Service
+@RequiredArgsConstructor
 public class EmailGeneratorService {
 
-    private final WebClient webClient;
-    private final String apiKey;
+    private final WebClient.Builder webClientBuilder;
 
-    public EmailGeneratorService(
-            WebClient.Builder webClientBuilder,
-            @Value("${groq.api.key}") String apiKey
-    ) {
-        this.apiKey = apiKey;
-        this.webClient = webClientBuilder
-                .baseUrl("https://api.groq.com/openai/v1")
-                .defaultHeader("Authorization", "Bearer " + apiKey)
-                .defaultHeader("Content-Type", "application/json")
-                .build();
-    }
+    @Value("${groq.api.key}")
+    private String apiKey;
+
+    @Value("${groq.api.url}")
+    private String baseUrl;
+
+    @Value("${groq.model}")
+    private String model;
 
     public String generateEmailReply(EmailRequest emailRequest) {
 
+        WebClient webClient = webClientBuilder
+                .baseUrl(baseUrl)
+                .defaultHeader("Authorization", "Bearer " + apiKey)
+                .defaultHeader("Content-Type", "application/json")
+                .build();
+
         String prompt = buildPrompt(emailRequest);
 
-        String requestBody = """
+        String body = """
         {
-          "model": "llama3-8b-8192",
+          "model": "%s",
           "messages": [
-            {
-              "role": "user",
-              "content": "%s"
-            }
-          ],
-          "temperature": 0.7
+            { "role": "user", "content": "%s" }
+          ]
         }
-        """.formatted(prompt.replace("\"", "\\\""));
+        """.formatted(model, prompt.replace("\"", "\\\""));
 
         String response = webClient.post()
                 .uri("/chat/completions")
-                .bodyValue(requestBody)
+                .bodyValue(body)
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
 
-        return extractResponse(response);
+        return extractText(response);
     }
 
-    private String extractResponse(String response) {
+    private String extractText(String response) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(response);
@@ -60,41 +60,27 @@ public class EmailGeneratorService {
                     .get(0)
                     .path("message")
                     .path("content")
-                    .asText()
-                    .trim();
+                    .asText();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse Groq response", e);
+            throw new RuntimeException("Groq response parse failed", e);
         }
     }
 
-    private String buildPrompt(EmailRequest emailRequest) {
+    private String buildPrompt(EmailRequest req) {
+        return """
+        Write a professional email reply.
 
-        StringBuilder prompt = new StringBuilder();
+        Tone: %s
 
-        prompt.append("""
-You are a professional email reply generator.
+        Original email:
+        %s
 
-STRICT RULES:
-- Generate ONLY ONE final email reply
-- No options
-- No explanation
-- Output ONLY email text
-
-""");
-
-        if (emailRequest.getTone() != null && !emailRequest.getTone().isEmpty()) {
-            prompt.append("Tone: ").append(emailRequest.getTone()).append("\n");
-        }
-
-        prompt.append("\nOriginal email:\n");
-        prompt.append(emailRequest.getEmailContent());
-
-        if (emailRequest.getInstructions() != null &&
-                !emailRequest.getInstructions().isEmpty()) {
-            prompt.append("\n\nAdditional instructions:\n")
-                    .append(emailRequest.getInstructions());
-        }
-
-        return prompt.toString();
+        Instructions:
+        %s
+        """.formatted(
+                req.getTone(),
+                req.getEmailContent(),
+                req.getInstructions()
+        );
     }
 }
