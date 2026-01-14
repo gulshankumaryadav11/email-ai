@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Map;
+
 @Service
 public class EmailGeneratorService {
 
@@ -17,42 +19,73 @@ public class EmailGeneratorService {
             @Value("${groq.api.key}") String apiKey
     ) {
         this.webClient = webClientBuilder
-                .baseUrl("https://api.groq.com")
+                .baseUrl("https://api.groq.com/openai/v1")
                 .build();
         this.apiKey = apiKey;
     }
 
-    // ================= MAIN METHOD =================
-    public String generateEmailReply(EmailRequest emailRequest) {
+    public String generateEmailReply(EmailRequest request) {
 
-        String prompt = buildPrompt(emailRequest);
+        // ✅ STEP 1: Build FULL prompt text
+        String prompt = buildPrompt(request);
 
-        String requestBody = """
-        {
-          "model": "llama-3.1-8b-instant",
-          "messages": [
-            {
-              "role": "user",
-              "content": "%s"
-            }
-          ]
-        }
-        """.formatted(prompt.replace("\"", "\\\""));
+        // ✅ STEP 2: Groq-compatible request body
+        Map<String, Object> body = Map.of(
+                "model", "llama-3.1-8b-instant",
+                "messages", new Object[]{
+                        Map.of(
+                                "role", "user",
+                                "content", prompt
+                        )
+                }
+        );
 
-        String rawResponse = webClient.post()
-                .uri("/openai/v1/chat/completions")
+        // ✅ STEP 3: Call Groq API
+        String response = webClient.post()
+                .uri("/chat/completions")
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
-                .bodyValue(requestBody)
+                .bodyValue(body)
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
 
-        return extractEmailText(rawResponse);
+        return extractContent(response);
     }
 
-    // ================= JSON PARSER =================
-    private String extractEmailText(String response) {
+    // ================= PROMPT BUILDER =================
+
+    private String buildPrompt(EmailRequest r) {
+        return """
+You are a professional email reply generator.
+
+STRICT RULES:
+- Generate ONLY ONE final email reply
+- No options
+- No explanations
+- Only email text
+
+Tone: %s
+
+Original Email:
+%s
+
+Additional Instructions:
+%s
+""".formatted(
+                safe(r.getTone()),
+                safe(r.getEmailContent()),
+                safe(r.getInstructions())
+        );
+    }
+
+    private String safe(String s) {
+        return s == null ? "" : s;
+    }
+
+    // ================= RESPONSE PARSER =================
+
+    private String extractContent(String response) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(response);
@@ -68,35 +101,5 @@ public class EmailGeneratorService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse Groq response", e);
         }
-    }
-
-    // ================= PROMPT BUILDER =================
-    private String buildPrompt(EmailRequest emailRequest) {
-
-        return """
-        You are a professional email reply generator.
-
-        STRICT RULES:
-        - Generate ONLY ONE email reply
-        - Do NOT give options
-        - Do NOT explain anything
-        - Output ONLY the email text
-
-        Tone: %s
-
-        Original email:
-        %s
-
-        Instructions:
-        %s
-        """.formatted(
-                safe(emailRequest.getTone()),
-                safe(emailRequest.getEmailContent()),
-                safe(emailRequest.getInstructions())
-        );
-    }
-
-    private String safe(String value) {
-        return value == null ? "" : value;
     }
 }
