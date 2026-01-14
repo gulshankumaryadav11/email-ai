@@ -2,73 +2,76 @@ package com.email.email_writer_sb;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Map;
+import java.util.List;
+
 @Service
-@RequiredArgsConstructor
 public class EmailGeneratorService {
 
-    private final WebClient.Builder webClientBuilder;
+    private final WebClient webClient;
+    private final String apiKey;
+    private final String model;
 
-    @Value("${groq.api.key}")
-    private String apiKey;
-
-    @Value("${groq.api.url}")
-    private String baseUrl;
-
-    @Value("${groq.model}")
-    private String model;
+    public EmailGeneratorService(
+            WebClient.Builder webClientBuilder,
+            @Value("${groq.api.url}") String baseUrl,
+            @Value("${groq.api.key}") String apiKey,
+            @Value("${groq.model}") String model
+    ) {
+        this.webClient = webClientBuilder.baseUrl(baseUrl).build();
+        this.apiKey = apiKey;
+        this.model = model;
+    }
 
     public String generateEmailReply(EmailRequest emailRequest) {
 
-        WebClient webClient = webClientBuilder
-                .baseUrl(baseUrl)
-                .defaultHeader("Authorization", "Bearer " + apiKey)
-                .defaultHeader("Content-Type", "application/json")
-                .build();
-
-        String prompt = buildPrompt(emailRequest);
-
-        String body = """
-        {
-          "model": "%s",
-          "messages": [
-            { "role": "user", "content": "%s" }
-          ]
-        }
-        """.formatted(model, prompt.replace("\"", "\\\""));
-
-        String response = webClient.post()
-                .uri("/chat/completions")
-                .bodyValue(body)
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
-
-        return extractText(response);
-    }
-
-    private String extractText(String response) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(response);
-            return root
-                    .path("choices")
-                    .get(0)
-                    .path("message")
-                    .path("content")
-                    .asText();
+            // ✅ Correct Groq/OpenAI compatible payload
+            Map<String, Object> requestBody = Map.of(
+                    "model", model,
+                    "messages", List.of(
+                            Map.of(
+                                    "role", "user",
+                                    "content", buildPrompt(emailRequest)
+                            )
+                    ),
+                    "temperature", 0.7
+            );
+
+            String response = webClient.post()
+                    .uri("/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            return extractText(response);
+
         } catch (Exception e) {
-            throw new RuntimeException("Groq response parse failed", e);
+            throw new RuntimeException("Groq API failed: " + e.getMessage(), e);
         }
     }
 
-    private String buildPrompt(EmailRequest req) {
+    private String extractText(String response) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(response);
+
+        return root.path("choices")
+                .get(0)
+                .path("message")
+                .path("content")
+                .asText();
+    }
+
+    private String buildPrompt(EmailRequest emailRequest) {
         return """
-        Write a professional email reply.
+        You are a professional email reply generator.
 
         Tone: %s
 
@@ -78,9 +81,9 @@ public class EmailGeneratorService {
         Instructions:
         %s
         """.formatted(
-                req.getTone(),
-                req.getEmailContent(),
-                req.getInstructions()
+                emailRequest.getTone(),
+                emailRequest.getEmailContent(),
+                emailRequest.getInstructions()
         );
     }
 }
