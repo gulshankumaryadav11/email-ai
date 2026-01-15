@@ -19,10 +19,10 @@ import {
   CssBaseline,
   useMediaQuery,
   Alert,
-  Divider
+  Divider,
+  CircularProgress
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
-
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 
 function App() {
@@ -38,6 +38,7 @@ function App() {
   const [generatedReply, setGeneratedReply] = useState("");
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const theme = useMemo(
     () =>
@@ -50,75 +51,81 @@ function App() {
           },
           primary: {
             main: darkMode ? "#4fd1c5" : "#2f8f8b"
-          },
-          text: {
-            primary: darkMode ? "#e6f5f3" : "#2e6f6b",
-            secondary: darkMode ? "#b6d8d4" : "#4b6f6c"
           }
         },
         typography: {
-          fontFamily: '"Georgia","Times New Roman",serif',
-          h4: {
-            fontWeight: 700,
-            fontSize: isMobile ? "22px" : "34px"
-          },
-          body1: {
-            fontSize: "15px",
-            lineHeight: 1.6
-          },
-          button: {
-            textTransform: "none",
-            fontWeight: 700
-          }
+          fontFamily: '"Inter", system-ui, sans-serif'
         }
       }),
-    [darkMode, isMobile]
+    [darkMode]
   );
 
   const handleSidebarClick = (key) => {
-    if (key === "dark") {
-      setDarkMode((v) => !v);
-    } else {
-      setActiveTab(key);
-    }
+    if (key === "dark") setDarkMode((v) => !v);
+    else setActiveTab(key);
     setDrawerOpen(false);
   };
 
-  const dummyGenerateReply = () => {
-    return `Thank you for your email.
-
-I have reviewed your message and will get back to you shortly.
-
-Best regards,
-EMIPI`;
-  };
-
-  const handleGenerate = () => {
+  /* ================= REAL BACKEND CALL ================= */
+  const handleGenerate = async () => {
     if (!emailContent.trim()) {
       setError("Original Email is required");
       return;
     }
+
     setError("");
-    const reply = dummyGenerateReply();
-    setGeneratedReply(reply);
+    setGeneratedReply("");
+    setLoading(true);
 
-    const entry = {
-      email: emailContent,
-      instructions,
-      tone,
-      reply,
-      date: new Date().toLocaleString()
-    };
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/email/generate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email: emailContent,
+            instructions,
+            tone
+          })
+        }
+      );
 
-    setHistory((prev) => [entry, ...prev]);
+      if (!res.ok) {
+        throw new Error("Backend error: " + res.status);
+      }
+
+      const data = await res.json();
+      console.log("Backend Response:", data);
+
+      const replyText = data.reply || data.message || data.text;
+
+      setGeneratedReply(replyText);
+
+      setHistory((prev) => [
+        {
+          email: emailContent,
+          instructions,
+          tone,
+          reply: replyText,
+          date: new Date().toLocaleString()
+        },
+        ...prev
+      ]);
+    } catch (err) {
+      console.error(err);
+      setError("Backend se response nahi aa raha");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const mostUsedTone = useMemo(() => {
     if (history.length === 0) return "—";
     const map = {};
-    history.forEach((h) => {
-      map[h.tone] = (map[h.tone] || 0) + 1;
-    });
+    history.forEach((h) => (map[h.tone] = (map[h.tone] || 0) + 1));
     return Object.keys(map).reduce((a, b) =>
       map[a] > map[b] ? a : b
     );
@@ -152,10 +159,7 @@ EMIPI`;
               background:
                 activeTab === key
                   ? "rgba(255,255,255,0.3)"
-                  : "transparent",
-              "&:hover": {
-                background: "rgba(255,255,255,0.35)"
-              }
+                  : "transparent"
             }}
           >
             <ListItemText
@@ -164,151 +168,11 @@ EMIPI`;
                   ? "Dark Mode"
                   : key.charAt(0).toUpperCase() + key.slice(1)
               }
-              primaryTypographyProps={{ fontWeight: 600 }}
             />
           </ListItem>
         ))}
       </List>
     </Box>
-  );
-
-  const GeneratorUI = (
-    <Grid container spacing={3}>
-      <Grid item xs={12} md={7}>
-        <Paper
-          sx={{
-            p: 3,
-            borderRadius: 4,
-            boxShadow: darkMode
-              ? "0 0 24px rgba(79,209,197,0.25)"
-              : "0 14px 30px rgba(0,0,0,0.12)"
-          }}
-        >
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          <TextField
-            fullWidth
-            label="Original Email"
-            multiline
-            rows={4}
-            value={emailContent}
-            onChange={(e) => setEmailContent(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            fullWidth
-            label="Additional Instructions"
-            multiline
-            rows={3}
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <FormControl fullWidth sx={{ mb: 3 }}>
-            <InputLabel>Tone</InputLabel>
-            <Select
-              value={tone}
-              label="Tone"
-              onChange={(e) => setTone(e.target.value)}
-            >
-              <MenuItem value="Professional">Professional</MenuItem>
-              <MenuItem value="Friendly">Friendly</MenuItem>
-              <MenuItem value="Casual">Casual</MenuItem>
-            </Select>
-          </FormControl>
-          <Button
-            fullWidth
-            onClick={handleGenerate}
-            sx={{
-              height: 48,
-              borderRadius: 999,
-              color: "#fff",
-              background: darkMode
-                ? "linear-gradient(90deg,#3fe0c0,#5b7cff)"
-                : "linear-gradient(90deg,#5fd0ff,#6c6cff)",
-              boxShadow: darkMode
-                ? "0 0 18px rgba(79,209,197,0.6)"
-                : "0 0 18px rgba(100,120,255,0.6)",
-              "&:hover": { opacity: 0.9 }
-            }}
-          >
-            Generate Reply
-          </Button>
-
-          {generatedReply && (
-            <Paper sx={{ mt: 3, p: 2, borderRadius: 3 }}>
-              <Typography fontWeight={700} mb={1}>
-                Generated Reply
-              </Typography>
-              <Typography>{generatedReply}</Typography>
-            </Paper>
-          )}
-        </Paper>
-      </Grid>
-
-      <Grid item xs={12} md={5}>
-        <Paper
-          sx={{
-            p: 3,
-            borderRadius: 4,
-            boxShadow: darkMode
-              ? "0 0 20px rgba(79,209,197,0.2)"
-              : "0 12px 28px rgba(0,0,0,0.08)"
-          }}
-        >
-          <Typography fontWeight={700} mb={2}>
-            How EMIPI Works
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
-          <Typography sx={{ mb: 1 }}>
-            Paste the original email.
-          </Typography>
-          <Typography sx={{ mb: 1 }}>
-            Add any additional instructions.
-          </Typography>
-          <Typography>Select a reply tone.</Typography>
-        </Paper>
-      </Grid>
-    </Grid>
-  );
-
-  const DashboardUI = (
-    <Grid container spacing={3}>
-      <Grid item xs={12} md={6}>
-        <Paper sx={{ p: 3, borderRadius: 4 }}>
-          <Typography variant="h4">{history.length}</Typography>
-          <Typography>Total Replies Generated</Typography>
-        </Paper>
-      </Grid>
-      <Grid item xs={12} md={6}>
-        <Paper sx={{ p: 3, borderRadius: 4 }}>
-          <Typography variant="h4">{mostUsedTone}</Typography>
-          <Typography>Most Used Tone</Typography>
-        </Paper>
-      </Grid>
-    </Grid>
-  );
-
-  const HistoryUI = (
-    <Paper sx={{ p: 3, borderRadius: 4 }}>
-      {history.length === 0 ? (
-        <Typography>No history yet</Typography>
-      ) : (
-        <List>
-          {history.map((item, idx) => (
-            <ListItem key={idx} alignItems="flex-start">
-              <ListItemText
-                primary={item.email.slice(0, 80)}
-                secondary={`Tone: ${item.tone} • ${item.date}\n${item.reply}`}
-              />
-            </ListItem>
-          ))}
-        </List>
-      )}
-    </Paper>
   );
 
   return (
@@ -318,18 +182,13 @@ EMIPI`;
         {!isMobile && Sidebar}
 
         {isMobile && (
-          <Drawer
-            anchor="left"
-            open={drawerOpen}
-            onClose={() => setDrawerOpen(false)}
-            sx={{ "& .MuiDrawer-paper": { background: "none" } }}
-          >
+          <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
             {Sidebar}
           </Drawer>
         )}
 
-        <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <Box sx={{ position: "relative", py: 2, textAlign: "center" }}>
+        <Box sx={{ flex: 1 }}>
+          <Box sx={{ py: 2, textAlign: "center", position: "relative" }}>
             {isMobile && (
               <IconButton
                 onClick={() => setDrawerOpen(true)}
@@ -339,25 +198,126 @@ EMIPI`;
               </IconButton>
             )}
             <Typography variant="h4">Welcome to EMIPI</Typography>
-            <Typography sx={{ mt: 1 }}>
-              Generate professional, friendly, or casual email replies instantly.
-            </Typography>
           </Box>
 
-          <Container maxWidth="lg" sx={{ flex: 1, mt: 3 }}>
-            {activeTab === "generator" && GeneratorUI}
-            {activeTab === "dashboard" && DashboardUI}
-            {activeTab === "history" && HistoryUI}
+          <Container maxWidth="lg">
+            {activeTab === "generator" && (
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={7}>
+                  <Paper sx={{ p: 3 }}>
+                    {error && <Alert severity="error">{error}</Alert>}
+
+                    <TextField
+                      fullWidth
+                      label="Original Email"
+                      multiline
+                      rows={4}
+                      value={emailContent}
+                      onChange={(e) => setEmailContent(e.target.value)}
+                      sx={{ my: 2 }}
+                    />
+
+                    <TextField
+                      fullWidth
+                      label="Additional Instructions"
+                      multiline
+                      rows={3}
+                      value={instructions}
+                      onChange={(e) => setInstructions(e.target.value)}
+                      sx={{ mb: 2 }}
+                    />
+
+                    <FormControl fullWidth sx={{ mb: 3 }}>
+                      <InputLabel>Tone</InputLabel>
+                      <Select
+                        value={tone}
+                        label="Tone"
+                        onChange={(e) => setTone(e.target.value)}
+                      >
+                        <MenuItem value="Professional">Professional</MenuItem>
+                        <MenuItem value="Friendly">Friendly</MenuItem>
+                        <MenuItem value="Casual">Casual</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <Button
+                      fullWidth
+                      onClick={handleGenerate}
+                      disabled={loading}
+                      sx={{ height: 48, borderRadius: 999 }}
+                    >
+                      {loading ? (
+                        <CircularProgress size={24} />
+                      ) : (
+                        "Generate Reply"
+                      )}
+                    </Button>
+
+                    {generatedReply && (
+                      <Paper sx={{ mt: 3, p: 2 }}>
+                        <Typography fontWeight={700}>
+                          Generated Reply
+                        </Typography>
+                        <Typography>{generatedReply}</Typography>
+                      </Paper>
+                    )}
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12} md={5}>
+                  <Paper sx={{ p: 3 }}>
+                    <Typography fontWeight={700}>
+                      How EMIPI Works
+                    </Typography>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography>Paste email → Choose tone → Generate</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+            )}
+
+            {activeTab === "dashboard" && (
+              <Grid container spacing={3}>
+                <Grid item xs={6}>
+                  <Paper sx={{ p: 3 }}>
+                    <Typography variant="h4">
+                      {history.length}
+                    </Typography>
+                    <Typography>Total Replies</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6}>
+                  <Paper sx={{ p: 3 }}>
+                    <Typography variant="h4">
+                      {mostUsedTone}
+                    </Typography>
+                    <Typography>Most Used Tone</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+            )}
+
+            {activeTab === "history" && (
+              <Paper sx={{ p: 3 }}>
+                {history.length === 0 ? (
+                  <Typography>No history yet</Typography>
+                ) : (
+                  <List>
+                    {history.map((h, i) => (
+                      <ListItem key={i}>
+                        <ListItemText
+                          primary={h.email.slice(0, 60)}
+                          secondary={h.reply}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Paper>
+            )}
           </Container>
 
-          <Box
-            sx={{
-              py: 2,
-              textAlign: "center",
-              background: darkMode ? "#0b2d2a" : "#2f8f8b",
-              color: "#fff"
-            }}
-          >
+          <Box sx={{ py: 2, textAlign: "center" }}>
             © 2026 EMIPI · Smart Email Replies
           </Box>
         </Box>
@@ -367,23 +327,3 @@ EMIPI`;
 }
 
 export default App;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
