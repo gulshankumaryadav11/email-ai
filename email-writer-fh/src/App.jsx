@@ -21,7 +21,8 @@ import {
   Alert,
   Divider
 } from "@mui/material";
-import MenuIcon from "@mui/icons-material/Menu";
+import MenuIcon from "@mui/icons-material/MenuOutlined";
+
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 
 function App() {
