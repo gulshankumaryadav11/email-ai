@@ -23,6 +23,8 @@ import {
   CircularProgress
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DownloadIcon from "@mui/icons-material/Download";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 
 function App() {
@@ -40,6 +42,7 @@ function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /* ================= THEME ================= */
   const theme = useMemo(
     () =>
       createTheme({
@@ -54,10 +57,14 @@ function App() {
           }
         },
         typography: {
-          fontFamily: '"Inter", system-ui, sans-serif'
+          fontFamily: '"Georgia","Times New Roman",serif',
+          h4: {
+            fontWeight: 700,
+            fontSize: isMobile ? "22px" : "34px"
+          }
         }
       }),
-    [darkMode]
+    [darkMode, isMobile]
   );
 
   const handleSidebarClick = (key) => {
@@ -66,7 +73,7 @@ function App() {
     setDrawerOpen(false);
   };
 
-  /* ================= REAL BACKEND CALL ================= */
+  /* ================= BACKEND ================= */
   const handleGenerate = async () => {
     if (!emailContent.trim()) {
       setError("Original Email is required");
@@ -82,55 +89,46 @@ function App() {
         `${import.meta.env.VITE_API_URL}/api/email/generate`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            email: emailContent,
-            instructions,
-            tone
-          })
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailContent, instructions, tone })
         }
       );
 
-      if (!res.ok) {
-        throw new Error("Backend error: " + res.status);
-      }
+      if (!res.ok) throw new Error("Backend error");
 
-      const data = await res.json();
-      console.log("Backend Response:", data);
-
-      const replyText = data.reply || data.message || data.text;
-
+      const replyText = await res.text();
       setGeneratedReply(replyText);
 
       setHistory((prev) => [
         {
           email: emailContent,
-          instructions,
           tone,
           reply: replyText,
           date: new Date().toLocaleString()
         },
         ...prev
       ]);
-    } catch (err) {
-      console.error(err);
-      setError("Backend se response nahi aa raha");
+    } catch {
+      setError("Backend response failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const mostUsedTone = useMemo(() => {
-    if (history.length === 0) return "—";
-    const map = {};
-    history.forEach((h) => (map[h.tone] = (map[h.tone] || 0) + 1));
-    return Object.keys(map).reduce((a, b) =>
-      map[a] > map[b] ? a : b
-    );
-  }, [history]);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedReply);
+  };
 
+  const handleDownload = () => {
+    const blob = new Blob([generatedReply], { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "email-reply.txt";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  /* ================= SIDEBAR ================= */
   const Sidebar = (
     <Box
       sx={{
@@ -147,6 +145,7 @@ function App() {
       <Typography sx={{ fontSize: 22, fontWeight: 700, mb: 4 }}>
         EMIPI
       </Typography>
+
       <List>
         {["generator", "dashboard", "history", "dark"].map((key) => (
           <ListItem
@@ -178,16 +177,23 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+
       <Box sx={{ minHeight: "100vh", display: "flex" }}>
         {!isMobile && Sidebar}
 
         {isMobile && (
-          <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+          <Drawer
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            sx={{ "& .MuiDrawer-paper": { background: "none" } }}
+          >
             {Sidebar}
           </Drawer>
         )}
 
-        <Box sx={{ flex: 1 }}>
+        {/* MAIN */}
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          {/* HEADER */}
           <Box sx={{ py: 2, textAlign: "center", position: "relative" }}>
             {isMobile && (
               <IconButton
@@ -198,11 +204,17 @@ function App() {
               </IconButton>
             )}
             <Typography variant="h4">Welcome to EMIPI</Typography>
+            <Typography sx={{ mt: 1 }}>
+              Generate professional, friendly, or casual email replies instantly.
+            </Typography>
           </Box>
 
-          <Container maxWidth="lg">
+          {/* CONTENT */}
+          <Container maxWidth="lg" sx={{ flex: 1, mt: 3 }}>
+            {/* ================= GENERATOR ================= */}
             {activeTab === "generator" && (
-              <Grid container spacing={3}>
+              <Grid container spacing={3} alignItems="flex-start">
+                {/* LEFT */}
                 <Grid item xs={12} md={7}>
                   <Paper sx={{ p: 3 }}>
                     {error && <Alert severity="error">{error}</Alert>}
@@ -244,10 +256,17 @@ function App() {
                       fullWidth
                       onClick={handleGenerate}
                       disabled={loading}
-                      sx={{ height: 48, borderRadius: 999 }}
+                      sx={{
+                        height: 48,
+                        borderRadius: 999,
+                        color: "#fff",
+                        background: darkMode
+                          ? "linear-gradient(90deg,#3fe0c0,#5b7cff)"
+                          : "linear-gradient(90deg,#2f8f8b,#4fd1c5)"
+                      }}
                     >
                       {loading ? (
-                        <CircularProgress size={24} />
+                        <CircularProgress size={24} sx={{ color: "#fff" }} />
                       ) : (
                         "Generate Reply"
                       )}
@@ -258,45 +277,89 @@ function App() {
                         <Typography fontWeight={700}>
                           Generated Reply
                         </Typography>
-                        <Typography>{generatedReply}</Typography>
+
+                        <Typography sx={{ whiteSpace: "pre-line", mt: 1 }}>
+                          {generatedReply}
+                        </Typography>
+
+                        <Divider sx={{ my: 2 }} />
+
+                        <Box sx={{ display: "flex", gap: 2 }}>
+                          <Button
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon />}
+                            onClick={handleCopy}
+                          >
+                            Copy
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            startIcon={<DownloadIcon />}
+                            onClick={handleDownload}
+                          >
+                            Download
+                          </Button>
+                        </Box>
                       </Paper>
                     )}
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} md={5}>
+                {/* RIGHT – STICKY */}
+                <Grid
+                  item
+                  xs={12}
+                  md={5}
+                  sx={{
+                    position: { md: "sticky" },
+                    top: { md: 24 },
+                    alignSelf: "flex-start"
+                  }}
+                >
                   <Paper sx={{ p: 3 }}>
-                    <Typography fontWeight={700}>
+                    <Typography fontWeight={700} mb={2}>
                       How EMIPI Works
                     </Typography>
-                    <Divider sx={{ my: 2 }} />
-                    <Typography>Paste email → Choose tone → Generate</Typography>
+                    <Divider sx={{ mb: 2 }} />
+                    <Typography>1. Paste the original email</Typography>
+                    <Typography sx={{ mt: 1 }}>
+                      2. Add instructions if needed
+                    </Typography>
+                    <Typography sx={{ mt: 1 }}>
+                      3. Select the reply tone
+                    </Typography>
+                    <Typography sx={{ mt: 1 }}>
+                      4. Generate the reply
+                    </Typography>
+                    <Typography sx={{ mt: 1 }}>
+                      5. Copy or download the email
+                    </Typography>
                   </Paper>
                 </Grid>
               </Grid>
             )}
 
+            {/* ================= DASHBOARD ================= */}
             {activeTab === "dashboard" && (
               <Grid container spacing={3}>
-                <Grid item xs={6}>
+                <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 3 }}>
-                    <Typography variant="h4">
-                      {history.length}
-                    </Typography>
-                    <Typography>Total Replies</Typography>
+                    <Typography variant="h4">{history.length}</Typography>
+                    <Typography>Total Replies Generated</Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 3 }}>
                     <Typography variant="h4">
-                      {mostUsedTone}
+                      {history[0]?.tone || "—"}
                     </Typography>
-                    <Typography>Most Used Tone</Typography>
+                    <Typography>Last Used Tone</Typography>
                   </Paper>
                 </Grid>
               </Grid>
             )}
 
+            {/* ================= HISTORY ================= */}
             {activeTab === "history" && (
               <Paper sx={{ p: 3 }}>
                 {history.length === 0 ? (
@@ -304,10 +367,10 @@ function App() {
                 ) : (
                   <List>
                     {history.map((h, i) => (
-                      <ListItem key={i}>
+                      <ListItem key={i} alignItems="flex-start">
                         <ListItemText
-                          primary={h.email.slice(0, 60)}
-                          secondary={h.reply}
+                          primary={h.email.slice(0, 80)}
+                          secondary={`${h.date}\n\n${h.reply}`}
                         />
                       </ListItem>
                     ))}
@@ -317,7 +380,16 @@ function App() {
             )}
           </Container>
 
-          <Box sx={{ py: 2, textAlign: "center" }}>
+          {/* FOOTER */}
+          <Box
+            sx={{
+              mt: "auto",
+              py: 3,
+              textAlign: "center",
+              background: darkMode ? "#0b2d2a" : "#2f8f8b",
+              color: "#fff"
+            }}
+          >
             © 2026 EMIPI · Smart Email Replies
           </Box>
         </Box>
