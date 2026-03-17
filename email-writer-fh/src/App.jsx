@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from "react";
-import heroVideo from "./assets/hero-video.mp4";
 import {
     Box,
     Container,
@@ -354,13 +353,12 @@ function LandingPage({ onLogin }) {
 
                 <video
                     className="lp-hero-video"
+                    src="/hero-video.mp4"
                     autoPlay
                     loop
                     muted
                     playsInline
-                >
-                    <source src={heroVideo} type="video/mp4" />
-                </video>
+                />
 
                 {/* Optional overlay */}
                 <div className="lp-hero-overlay"></div>
