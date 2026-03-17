@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import heroVideo from "./assets/hero-video.mp4";
 import {
     Box,
     Container,
@@ -351,7 +352,6 @@ function LandingPage({ onLogin }) {
 
             <section className="lp-hero">
 
-                {/* Background Video */}
                 <video
                     className="lp-hero-video"
                     autoPlay
@@ -359,7 +359,7 @@ function LandingPage({ onLogin }) {
                     muted
                     playsInline
                 >
-                    <source src="/hero-video.mp4" type="video/mp4" />
+                    <source src={heroVideo} type="video/mp4" />
                 </video>
 
                 {/* Optional overlay */}
